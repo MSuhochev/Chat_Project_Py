@@ -2,7 +2,7 @@ import socket
 import threading
 
 # Connection Data
-host = '127.0.0.1'
+host = '94.241.168.240'
 port = 55555
 
 # Starting Server
@@ -14,6 +14,9 @@ server.listen()
 clients = []
 nicknames = []
 
+# Flag to control server running status
+server_running = True
+
 
 # Sending Messages To All Connected Clients
 def broadcast(message):
@@ -21,29 +24,18 @@ def broadcast(message):
         client.send(message)
 
 
-# Function to get the list of clients
-def list_clients():
-    client_list = ", ".join(nicknames)
-    return f"Подключенные клиенты: {client_list}"
-
-
 # Handling Messages From Clients
 def handle(client):
     while True:
         try:
             # Broadcasting Messages
-            message = client.recv(1024 * 4)
+            message = client.recv(1024)
             message_str = message.decode('utf-8')
-            if message_str.lower() == 'bye' or message_str.lower() == 'пока':
-                index = clients.index(client)
-                nickname = nicknames[index]
-                broadcast('{} left!'.format(nickname).encode('utf-8'))
-                clients.remove(client)
-                nicknames.remove(nickname)
-                client.close()
+            if message_str.lower() == 'стоп':
+                stop_server()
                 break
             elif message_str.lower() == 'кто в чате':
-                client.send(list_clients().encode('utf-8'))
+                send_clients_list(client)
             else:
                 broadcast(message)
         except:
@@ -57,12 +49,18 @@ def handle(client):
             break
 
 
+# Function to send the list of clients to a specific client
+def send_clients_list(client):
+    client_list = ", ".join(nicknames)
+    client.send(f"Подключенные клиенты: {client_list}".encode('utf-8'))
+
+
 # Receiving / Listening Function
 def receive():
-    while True:
+    while server_running:
         # Accept Connection
         client, address = server.accept()
-        print("Connected with {}".format(str(address)), 'utf-8')
+        print("Connected with {}".format(str(address)))
 
         # Request And Store Nickname
         client.send('NICK'.encode('utf-8'))
@@ -71,7 +69,7 @@ def receive():
         clients.append(client)
 
         # Print And Broadcast Nickname
-        print("Nickname is {}".format(nickname), 'utf-8')
+        print("Nickname is {}".format(nickname))
         broadcast("{} joined!".format(nickname).encode('utf-8'))
         client.send('Connected to server!'.encode('utf-8'))
 
@@ -80,5 +78,15 @@ def receive():
         thread.start()
 
 
-print("Server if listening...")
+def stop_server():
+    global server_running
+    server_running = False
+    print("Server is stopping...")
+    for client in clients:
+        client.send("Server is stopping...".encode('utf-8'))
+        client.close()
+    server.close()
+
+
+print("Server is listening...")
 receive()
